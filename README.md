@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# scrubref-web
 
-## Getting Started
+ScrubRef web frontend. Medical RAG chatbot UI for surgical trainees — thread-based chat interface backed by the scrubref-api and RAG pipeline.
 
-First, run the development server:
+Live: https://scrubref.shuf.site
+
+## Stack
+
+- Next.js 16 (App Router), TypeScript, Tailwind CSS v4
+- Supabase for auth (email/password + Google OAuth)
+- Papyrus/parchment academic theme via CSS variables
+
+## Running locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Production build:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+NEXT_PUBLIC_SITE_URL=https://scrubref.shuf.site npm run build
+npm start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment variables
 
-## Learn More
+Create `.env.local`:
 
-To learn more about Next.js, take a look at the following resources:
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Server-side — rewrites proxy to scrubref-api; defaults to http://localhost:3001
+API_URL=http://localhost:3001
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`NEXT_PUBLIC_API_URL` is intentionally empty. All API calls use relative paths (e.g. `/threads`, `/query/stream`) which Next.js rewrites to `API_URL` server-side. This keeps port 3001 off the public internet.
 
-## Deploy on Vercel
+## Pages
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Route | Purpose |
+|---|---|
+| `/login` | Email/password + Google OAuth sign-in |
+| `/signup` | Registration with optional ambassador referral |
+| `/forgot-password` | Send reset email |
+| `/reset-password` | Consume reset token from Supabase |
+| `/dashboard` | Main chat UI |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Architecture
+
+**API proxy** — `next.config.ts` rewrites `/threads/**`, `/query/**`, `/page/**`, `/images/**` to `API_URL`. The frontend never talks directly to the RAG backend.
+
+**Auth** — Supabase session managed by `@supabase/ssr`. The `src/proxy.ts` middleware guards `/dashboard` and redirects unauthenticated users to `/login`.
+
+**Chat** — SSE streaming from `/query/stream`. Tokens are rendered incrementally as they arrive. Input capped at 2000 characters.
+
+**Settings modal** — answer style preferences (depth, tone, restrictiveness) are sent with each query. Usage counter shows current daily/monthly counts; quota warning appears in the sidebar footer when ≥80% of monthly allowance is used.
+
+**Ambassador referral** — referral interest captured on auth pages and written to Supabase `referral_interest` table.
+
+## Key files
+
+```
+src/app/
+  (auth)/login/          Sign-in page
+  (auth)/signup/         Registration page
+  dashboard/             Chat UI, sidebar, settings modal
+  icon.png               Favicon
+src/proxy.ts             Auth guard middleware
+next.config.ts           API rewrites
+public/logo.png          App logo
+```
