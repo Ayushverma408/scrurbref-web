@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
+/* ── Papyrus palette ────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --papyrus:        #e8ddb8;   /* main background — warm parchment   */
+  --papyrus-light:  #f0ead0;   /* slightly lighter, cards            */
+  --papyrus-border: #ccc09a;   /* borders, dividers                  */
+  --ink:            #3a2a1a;   /* primary text — dark brown          */
+  --ink-muted:      #7a6650;   /* secondary text                     */
+  --ink-faint:      #a89880;   /* placeholder, tertiary              */
+  --sidebar-bg:     #2a1c10;   /* dark leather sidebar               */
+  --sidebar-border: #3e2d1e;   /* sidebar dividers                   */
+  --sidebar-text:   #c9b89a;   /* sidebar body text                  */
+  --sidebar-muted:  #b09878;   /* sidebar secondary text             */
+  --accent:         #8b3a2a;   /* deep red-brown — active/highlight  */
 }
 
+/* ── Tailwind v4 theme tokens ───────────────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-papyrus:        var(--papyrus);
+  --color-papyrus-light:  var(--papyrus-light);
+  --color-papyrus-border: var(--papyrus-border);
+  --color-ink:            var(--ink);
+  --color-ink-muted:      var(--ink-muted);
+  --color-ink-faint:      var(--ink-faint);
+  --color-sidebar:        var(--sidebar-bg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-text:   var(--sidebar-text);
+  --color-sidebar-muted:  var(--sidebar-muted);
+  --color-accent:         var(--accent);
+
+  --font-serif:  var(--font-garamond);
+  --font-chunk:  var(--font-lora);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ── Base ───────────────────────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--papyrus);
+  color: var(--ink);
+  font-family: var(--font-garamond), Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Chunk / source passage text ───────────────────────────────── */
+.chunk-text {
+  font-family: var(--font-lora), Georgia, serif;
+  font-style: italic;
+  color: var(--ink);
+  line-height: 1.85;
 }
