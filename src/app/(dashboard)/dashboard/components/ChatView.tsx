@@ -2,12 +2,19 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import MessageBubble, { type Message, type MessageStatus } from "./MessageBubble";
+import MessageBubble, { type Message, type MessageStatus, type MessageLatency } from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import { type Chunk } from "./SourcesPanel";
 import { type ScrapedImage } from "./ImagesPanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+const SUB_PHASE_LABELS: Record<string, string> = {
+  hyde:   "Thinking…",
+  embed:  "Embedding the query…",
+  search: "Searching across 4 textbooks…",
+  rerank: "Reranking and checking relevance…",
+};
 
 interface ChatViewProps {
   threadId: string;
@@ -158,19 +165,23 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
 
             if (data.phase === "retrieving") {
               setMessages((prev) =>
-                prev.map((m) => m.id === assistantId ? { ...m, status: "retrieving" } : m)
+                prev.map((m) => m.id === assistantId ? { ...m, status: "retrieving", statusLabel: undefined } : m)
+              );
+            } else if (data.phase === "sub_phase") {
+              setMessages((prev) =>
+                prev.map((m) => m.id === assistantId ? { ...m, statusLabel: SUB_PHASE_LABELS[data.label] ?? data.label } : m)
               );
             } else if (data.phase === "retrieved") {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
-                    ? { ...m, status: "generating", chunks: data.chunks ?? [] }
+                    ? { ...m, status: "generating", statusLabel: undefined, chunks: data.chunks ?? [] }
                     : m
                 )
               );
             } else if (data.phase === "generating") {
               setMessages((prev) =>
-                prev.map((m) => m.id === assistantId ? { ...m, status: "generating" } : m)
+                prev.map((m) => m.id === assistantId ? { ...m, status: "generating", statusLabel: undefined } : m)
               );
             } else if (data.phase === "token") {
               setMessages((prev) =>
@@ -181,6 +192,14 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
                 )
               );
             } else if (data.phase === "done") {
+              const latency: MessageLatency = {
+                hydeS:     data.latency_hyde_s,
+                embedS:    data.latency_embed_s,
+                searchS:   data.latency_search_s,
+                rerankS:   data.latency_rerank_s,
+                llmS:      data.latency_llm_s,
+                totalS:    data.latency_total_s,
+              };
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -190,6 +209,7 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
                         chunks:  data.chunks ?? [],
                         images:  (data.images ?? []) as ScrapedImage[],
                         status:  "done",
+                        latency,
                       }
                     : m
                 )

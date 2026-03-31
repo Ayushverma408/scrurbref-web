@@ -29,43 +29,54 @@ export default function ChatInput({ value, onChange, onSubmit, disabled }: ChatI
 
   return (
     <div
-      className="px-3 py-3 sm:px-4 flex items-end gap-2 sm:gap-3 pb-safe"
+      className="px-3 py-3 sm:px-4"
       style={{
         backgroundColor: "var(--papyrus)",
         borderTop: "1px solid var(--papyrus-border)",
         paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
       }}
     >
-      <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <textarea
-          ref={ref}
-          value={value}
-          onChange={(e) => onChange(e.target.value.slice(0, 2000))}
-          onKeyDown={handleKeyDown}
-          placeholder="Type your question here…"
-          disabled={disabled}
-          rows={1}
-          maxLength={2000}
-          className="resize-none font-serif text-sm text-ink bg-transparent outline-none leading-relaxed disabled:opacity-50 w-full"
-          style={{ maxHeight: "160px" }}
-        />
-        {value.length > 1500 && (
-          <span
-            className="text-xs font-serif self-end"
-            style={{ color: value.length >= 2000 ? "var(--accent)" : "var(--ink-faint)" }}
-          >
-            {value.length}/2000
-          </span>
-        )}
-      </div>
-      <button
-        onClick={onSubmit}
-        disabled={disabled || !value.trim() || value.length > 2000}
-        className="shrink-0 px-4 py-2 rounded-lg text-sm font-serif font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ backgroundColor: "var(--ink)", color: "var(--papyrus)" }}
+      <div
+        className="flex items-end gap-2 rounded-xl px-3 py-2"
+        style={{
+          backgroundColor: "var(--papyrus-light)",
+          border: "1.5px solid var(--papyrus-border)",
+          transition: "border-color 0.15s",
+        }}
+        onFocusCapture={(e) => (e.currentTarget.style.borderColor = "var(--ink-muted)")}
+        onBlurCapture={(e) => (e.currentTarget.style.borderColor = "var(--papyrus-border)")}
       >
-        Answer
-      </button>
+        <div className="flex-1 flex flex-col gap-1 min-w-0">
+          <textarea
+            ref={ref}
+            value={value}
+            onChange={(e) => onChange(e.target.value.slice(0, 2000))}
+            onKeyDown={handleKeyDown}
+            placeholder="Type your question here…"
+            disabled={disabled}
+            rows={1}
+            maxLength={2000}
+            className="resize-none font-serif text-sm text-ink bg-transparent outline-none leading-relaxed disabled:opacity-50 w-full"
+            style={{ maxHeight: "160px" }}
+          />
+          {value.length > 1500 && (
+            <span
+              className="text-xs font-serif self-end"
+              style={{ color: value.length >= 2000 ? "var(--accent)" : "var(--ink-faint)" }}
+            >
+              {value.length}/2000
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onSubmit}
+          disabled={disabled || !value.trim() || value.length > 2000}
+          className="shrink-0 px-4 py-2 rounded-lg text-sm font-serif font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: "var(--ink)", color: "var(--papyrus)" }}
+        >
+          Answer
+        </button>
+      </div>
     </div>
   );
 }

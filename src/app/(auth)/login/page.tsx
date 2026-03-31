@@ -217,6 +217,15 @@ export default function LoginPage() {
                   Sign up free
                 </Link>
               </p>
+
+              <div className="mt-4 text-center">
+                <Link
+                  href="/demo"
+                  className="font-serif text-xs text-ink-faint hover:text-ink-muted transition-colors"
+                >
+                  Try a demo first — no signup needed
+                </Link>
+              </div>
             </div>
           </div>
 

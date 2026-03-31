@@ -6,6 +6,16 @@ import ImagesPanel, { type ScrapedImage } from "./ImagesPanel";
 
 export type MessageStatus = "retrieving" | "generating" | "done" | "error";
 
+export interface MessageLatency {
+  hydeS?: number;
+  embedS?: number;
+  searchS?: number;
+  rerankS?: number;
+  retrievalS?: number;
+  llmS?: number;
+  totalS?: number;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -13,14 +23,58 @@ export interface Message {
   chunks?: Chunk[];
   images?: ScrapedImage[];
   status?: MessageStatus;
+  statusLabel?: string;
+  latency?: MessageLatency;
 }
 
-const STATUS_LABEL: Record<MessageStatus, string> = {
-  retrieving: "Searching textbooks…",
-  generating: "Generating answer…",
-  done:       "",
-  error:      "Something went wrong.",
+const SUB_PHASE_LABELS: Record<string, string> = {
+  hyde:   "Generating a hypothetical answer…",
+  embed:  "Embedding the query…",
+  search: "Searching across 4 textbooks…",
+  rerank: "Reranking passages…",
 };
+
+const FALLBACK_LABELS: Record<string, string> = {
+  retrieving: "Thinking…",
+  generating: "Generating response…",
+};
+
+function StatusLine({ status, label }: { status: MessageStatus; label?: string }) {
+  const text = label ?? FALLBACK_LABELS[status] ?? "Working…";
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--ink-muted)" }} />
+      <span className="font-serif text-xs text-ink-muted italic">{text}</span>
+    </div>
+  );
+}
+
+function LatencyBar({ latency }: { latency: MessageLatency }) {
+  const fmt = (s?: number) => s != null ? `${s.toFixed(1)}s` : null;
+
+  const parts: { label: string; value: string }[] = [];
+  if (latency.hydeS != null)     parts.push({ label: "HyDE",      value: fmt(latency.hydeS)! });
+  if (latency.searchS != null)   parts.push({ label: "search",    value: fmt(latency.searchS)! });
+  if (latency.rerankS != null)   parts.push({ label: "rerank",    value: fmt(latency.rerankS)! });
+  if (latency.llmS != null)      parts.push({ label: "generate",  value: fmt(latency.llmS)! });
+  if (latency.totalS != null)    parts.push({ label: "total",     value: fmt(latency.totalS)! });
+
+  if (!parts.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {parts.map(({ label, value }, i) => (
+        <span key={label} className="font-serif text-xs text-ink-faint flex items-center gap-1">
+          {i > 0 && i === parts.length - 1
+            ? <span className="text-ink-faint opacity-40 mr-1">·</span>
+            : null}
+          <span style={{ color: "var(--ink-faint)" }}>{label}</span>
+          <span style={{ color: "var(--ink-muted)" }}>{value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function MessageBubble({ message }: { message: Message }) {
   if (message.role === "user") {
@@ -39,21 +93,18 @@ export default function MessageBubble({ message }: { message: Message }) {
     );
   }
 
-  // Assistant message
   const status = message.status ?? "done";
 
   return (
     <div className="flex justify-start">
       <div className="w-full max-w-[95%] sm:max-w-[85%]">
         {/* Status indicator */}
-        {status !== "done" && (
+        {status !== "done" && status !== "error" && (
+          <StatusLine status={status} label={message.statusLabel} />
+        )}
+        {status === "error" && (
           <div className="flex items-center gap-2 mb-3">
-            {status !== "error" && (
-              <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--ink-muted)" }} />
-            )}
-            <span className="font-serif text-xs text-ink-muted italic">
-              {STATUS_LABEL[status]}
-            </span>
+            <span className="font-serif text-xs text-accent italic">Something went wrong.</span>
           </div>
         )}
 
@@ -94,14 +145,19 @@ export default function MessageBubble({ message }: { message: Message }) {
           </div>
         )}
 
-        {/* Sources */}
-        {status === "done" && message.chunks && message.chunks.length > 0 && (
+        {/* Sources — shown as soon as chunks arrive (during generation) */}
+        {(status === "generating" || status === "done") && message.chunks && message.chunks.length > 0 && (
           <SourcesPanel chunks={message.chunks} />
         )}
 
         {/* Scraped figures */}
-        {status === "done" && message.images && message.images.length > 0 && (
+        {(status === "generating" || status === "done") && message.images && message.images.length > 0 && (
           <ImagesPanel images={message.images} token="" />
+        )}
+
+        {/* Latency breakdown — only after full answer */}
+        {status === "done" && message.latency && (
+          <LatencyBar latency={message.latency} />
         )}
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 interface PagePreviewModalProps {
   collection: string;
@@ -33,7 +33,6 @@ export default function PagePreviewModal({
       try {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
 
         // Fetch prev, current, next pages in parallel
         const pageNums = [page - 1, page, page + 1].filter((p) => p > 0);
@@ -44,9 +43,9 @@ export default function PagePreviewModal({
               params.set("highlight", chunkContent.slice(0, 120));
             }
             const url = `${API_URL}/page/${collection}/${p}?${params}`;
-            const res = await fetch(url, {
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
+            const headers: Record<string, string> = {};
+            if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+            const res = await fetch(url, { headers });
             if (!res.ok) return null;
             const blob = await res.blob();
             return {

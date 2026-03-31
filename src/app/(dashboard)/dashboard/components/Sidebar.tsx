@@ -59,6 +59,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
         ? `/dashboard?thread=${thread.id}&q=${encodeURIComponent(question)}`
         : `/dashboard?thread=${thread.id}`;
       router.push(url);
+      router.refresh();
     } finally {
       setCreating(false);
     }

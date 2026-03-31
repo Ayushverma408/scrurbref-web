@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/forgot-password", "/reset-password"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/forgot-password", "/reset-password", "/demo"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -34,6 +34,10 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+
+  // API proxy paths — handled by Next.js rewrites → scrubref-api, no page-level auth needed
+  const isApiProxy = ["/page/", "/query/", "/threads/", "/images/", "/demo/"].some((p) => pathname.startsWith(p));
+  if (isApiProxy) return response;
 
   // Not logged in and trying to access a protected page → login
   if (!user && !isPublic) {

@@ -29,6 +29,7 @@ export default function EmptyState() {
     if (!res.ok) return;
     const thread = await res.json();
     router.push(`/dashboard?thread=${thread.id}&q=${encodeURIComponent(question)}`);
+    router.refresh();
   }
 
   return (

@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
       { source: "/threads",        destination: `${apiBase}/threads` },
       { source: "/threads/:path*", destination: `${apiBase}/threads/:path*` },
       { source: "/query/:path*",   destination: `${apiBase}/query/:path*` },
+      { source: "/demo/:path*",    destination: `${apiBase}/demo/:path*` },
       { source: "/page/:path*",    destination: `${apiBase}/page/:path*` },
       { source: "/images/:path*",  destination: `${apiBase}/images/:path*` },
     ];
