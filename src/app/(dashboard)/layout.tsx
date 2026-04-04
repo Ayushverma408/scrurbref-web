@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import MobileNavWrapper from "./dashboard/components/MobileNavWrapper";
+import { ThreadProvider } from "./dashboard/components/ThreadContext";
 
 export default async function DashboardLayout({
   children,
@@ -36,10 +37,12 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-papyrus">
-      <MobileNavWrapper userEmail={user!.email ?? ""} threads={threads} usage={usage} />
+    <ThreadProvider>
+      <div className="h-screen flex overflow-hidden bg-papyrus">
+        <MobileNavWrapper userEmail={user!.email ?? ""} threads={threads} usage={usage} />
 
-      <main className="flex-1 min-w-0 overflow-y-auto pt-12 md:pt-0">{children}</main>
-    </div>
+        <main className="flex-1 min-w-0 overflow-y-auto pt-12 md:pt-0">{children}</main>
+      </div>
+    </ThreadProvider>
   );
 }

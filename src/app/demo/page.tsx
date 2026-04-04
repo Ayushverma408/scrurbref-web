@@ -37,6 +37,22 @@ export default function DemoPage() {
   const [used, setUsed] = useState(0);
   const [limitHit, setLimitHit] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const settingsPanelRef = useRef<HTMLDivElement>(null);
+
+  // Close settings on outside click
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      if (
+        settingsBtnRef.current?.contains(e.target as Node) ||
+        settingsPanelRef.current?.contains(e.target as Node)
+      ) return;
+      setSettingsOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [settingsOpen]);
 
   // Settings — local state, no Supabase
   const [depth, setDepth] = useState("balanced");
@@ -172,6 +188,7 @@ export default function DemoPage() {
         <div className="flex items-center gap-3">
           {/* Settings toggle */}
           <button
+            ref={settingsBtnRef}
             onClick={() => setSettingsOpen((o) => !o)}
             className="font-serif text-xs px-2.5 py-1.5 rounded-lg transition-colors"
             style={{
@@ -204,6 +221,7 @@ export default function DemoPage() {
       {/* Settings panel (collapsible, below top bar) */}
       {settingsOpen && (
         <div
+          ref={settingsPanelRef}
           className="shrink-0 px-4 py-4 sm:px-6 space-y-3"
           style={{ borderBottom: "1px solid var(--papyrus-border)", backgroundColor: "var(--papyrus-light)" }}
         >

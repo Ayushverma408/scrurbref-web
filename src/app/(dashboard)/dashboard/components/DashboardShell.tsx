@@ -6,11 +6,24 @@ import { createClient } from "@/lib/supabase/client";
 import OnboardingCard from "./OnboardingCard";
 import EmptyState from "./EmptyState";
 import ChatView from "./ChatView";
+import { useThread } from "./ThreadContext";
 
 export default function DashboardShell() {
   const searchParams = useSearchParams();
-  const threadId = searchParams.get("thread");
+  const urlThreadId = searchParams.get("thread");
   const initialQuestion = searchParams.get("q") ?? undefined;
+
+  const { activeThreadId, setActiveThreadId } = useThread();
+
+  // Prefer context (set instantly on click) over URL (set after router round-trip)
+  const threadId = activeThreadId ?? urlThreadId;
+
+  // Once URL catches up, clear the context override
+  useEffect(() => {
+    if (urlThreadId && urlThreadId === activeThreadId) {
+      setActiveThreadId(null);
+    }
+  }, [urlThreadId, activeThreadId, setActiveThreadId]);
 
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(
     // If there's a threadId, user must have completed onboarding — skip the check.

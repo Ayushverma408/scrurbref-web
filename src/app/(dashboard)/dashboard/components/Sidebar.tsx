@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { HIGH_YIELD_THIS_WEEK, WEEK_LABEL } from "@/lib/highYield";
 import SettingsModal from "./SettingsModal";
 import { createClient } from "@/lib/supabase/client";
+import { useThread } from "./ThreadContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -40,6 +41,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hydeOpen, setHydeOpen] = useState(true);
   const [creating, setCreating] = useState(false);
+  const { setActiveThreadId } = useThread();
 
   async function createThread(question?: string) {
     if (creating) return;
@@ -54,8 +56,9 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
       : `/dashboard?thread=${threadId}`;
 
     onCloseMobile?.();
-    router.push(url); // navigate instantly — blank chat appears immediately
-    setCreating(false); // re-enable button immediately after navigation
+    setActiveThreadId(threadId); // immediately show blank chat — no router wait
+    setCreating(false);
+    router.push(url); // sync URL in background
 
     // Create thread in background — no await, no blocking the UI
     const supabase = createClient();

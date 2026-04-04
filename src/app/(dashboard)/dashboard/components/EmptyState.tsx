@@ -18,17 +18,21 @@ export default function EmptyState() {
   const router = useRouter();
 
   async function startWithQuestion(question: string) {
+    const threadId = crypto.randomUUID();
+    router.push(`/dashboard?thread=${threadId}&q=${encodeURIComponent(question)}`);
+
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const res = await fetch(`${API_URL}/threads`, {
+    await fetch(`${API_URL}/threads`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ id: threadId }),
     });
-    if (!res.ok) return;
-    const thread = await res.json();
-    router.push(`/dashboard?thread=${thread.id}&q=${encodeURIComponent(question)}`);
     router.refresh();
   }
 

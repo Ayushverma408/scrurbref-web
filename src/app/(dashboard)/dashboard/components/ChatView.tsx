@@ -246,9 +246,40 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-6">
         {messages.length === 0 && (
-          <p className="font-serif text-sm text-ink-faint text-center pt-8 italic">
-            Ask your first question below.
-          </p>
+          <div className="flex flex-col items-center justify-center h-full px-4 py-10 text-center select-none">
+            <p className="font-serif text-2xl font-semibold text-ink mb-1">What do you want to look up?</p>
+            <p className="font-serif text-sm text-ink-muted mb-8">
+              Answers grounded in 4 surgical textbooks — every claim is citable.
+            </p>
+
+            <div className="w-full max-w-xl grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                "Steps of a Whipple for pancreatic head cancer",
+                "Anatomical basis of posterior adrenalectomy",
+                "Management of CBD injury found intraoperatively",
+                "Blood supply to the oesophagus and implications for oesophagectomy",
+                "Layers of the anterior abdominal wall",
+                "Indications for damage control laparotomy",
+              ].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => !streaming && sendMessageText(q)}
+                  disabled={streaming}
+                  className="text-left px-4 py-3 rounded-xl font-serif text-sm text-ink-muted transition-colors hover:text-ink disabled:opacity-40"
+                  style={{
+                    backgroundColor: "var(--papyrus-light)",
+                    border: "1px solid var(--papyrus-border)",
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+
+            <p className="font-serif text-xs text-ink-faint mt-8">
+              Fischer · Sabiston · Shackelford · Blumgart
+            </p>
+          </div>
         )}
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
