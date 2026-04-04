@@ -25,11 +25,6 @@ export default function DashboardShell() {
     }
   }, [urlThreadId, setActiveThreadId]);
 
-  // Clear loading spinner once we have a thread to show
-  useEffect(() => {
-    if (threadId) setIsNavigating(false);
-  }, [threadId, setIsNavigating]);
-
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(
     // If there's a threadId, user must have completed onboarding — skip the check.
     threadId ? true : null
@@ -49,31 +44,27 @@ export default function DashboardShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show spinner immediately when any thread click was registered
-  if (isNavigating && !threadId) {
-    return (
-      <div className="flex-1 flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-3">
+  let content: React.ReactNode;
+  if (threadId) {
+    // key={threadId} forces remount on every thread switch so ChatView clears the spinner on mount
+    content = <ChatView key={threadId} threadId={threadId} initialQuestion={initialQuestion} />;
+  } else if (onboardingDone === null) {
+    content = null;
+  } else if (!onboardingDone) {
+    content = <OnboardingCard onComplete={() => setOnboardingDone(true)} />;
+  } else {
+    content = <EmptyState />;
+  }
+
+  return (
+    <div className="relative h-full flex flex-col flex-1">
+      {content}
+      {isNavigating && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3" style={{ backgroundColor: "var(--color-papyrus, #fdf6e3)" }}>
           <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin opacity-40" />
           <span className="text-xs font-serif opacity-40">Opening…</span>
         </div>
-      </div>
-    );
-  }
-
-  // If a threadId is active, skip onboarding entirely — show chat immediately.
-  if (threadId) {
-    return <ChatView threadId={threadId} initialQuestion={initialQuestion} />;
-  }
-
-  if (onboardingDone === null) {
-    // Tiny pause while reading cached session — render nothing to avoid flash.
-    return null;
-  }
-
-  if (!onboardingDone) {
-    return <OnboardingCard onComplete={() => setOnboardingDone(true)} />;
-  }
-
-  return <EmptyState />;
+      )}
+    </div>
+  );
 }

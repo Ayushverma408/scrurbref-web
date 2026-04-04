@@ -6,6 +6,7 @@ import MessageBubble, { type Message, type MessageStatus, type MessageLatency } 
 import ChatInput from "./ChatInput";
 import { type Chunk } from "./SourcesPanel";
 import { type ScrapedImage } from "./ImagesPanel";
+import { useThread } from "./ThreadContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -27,6 +28,10 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
   const [streaming, setStreaming] = useState(false);
   const [limitHit, setLimitHit] = useState<{ type: "daily" | "monthly"; reset: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Clear the navigation spinner as soon as this thread's view mounts
+  const { setIsNavigating } = useThread();
+  useEffect(() => { setIsNavigating(false); }, [setIsNavigating]);
 
   // Load existing messages
   useEffect(() => {
