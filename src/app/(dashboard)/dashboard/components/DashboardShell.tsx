@@ -18,12 +18,13 @@ export default function DashboardShell() {
   // Prefer context (set instantly on click) over URL (set after router round-trip)
   const threadId = activeThreadId ?? urlThreadId;
 
-  // Once URL catches up, clear the context override
+
+  // When Next.js Link navigation changes the URL, trust the URL over context
   useEffect(() => {
-    if (urlThreadId && urlThreadId === activeThreadId) {
+    if (urlThreadId) {
       setActiveThreadId(null);
     }
-  }, [urlThreadId, activeThreadId, setActiveThreadId]);
+  }, [urlThreadId, setActiveThreadId]);
 
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(
     // If there's a threadId, user must have completed onboarding — skip the check.
@@ -44,12 +45,10 @@ export default function DashboardShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Also resolve immediately when threadId appears (e.g. URL changed to include thread).
-  useEffect(() => {
-    if (threadId && onboardingDone === null) {
-      setOnboardingDone(true);
-    }
-  }, [threadId, onboardingDone]);
+  // If a threadId is active, skip onboarding entirely — show chat immediately.
+  if (threadId) {
+    return <ChatView threadId={threadId} initialQuestion={initialQuestion} />;
+  }
 
   if (onboardingDone === null) {
     // Tiny pause while reading cached session — render nothing to avoid flash.
@@ -58,10 +57,6 @@ export default function DashboardShell() {
 
   if (!onboardingDone) {
     return <OnboardingCard onComplete={() => setOnboardingDone(true)} />;
-  }
-
-  if (threadId) {
-    return <ChatView threadId={threadId} initialQuestion={initialQuestion} />;
   }
 
   return <EmptyState />;

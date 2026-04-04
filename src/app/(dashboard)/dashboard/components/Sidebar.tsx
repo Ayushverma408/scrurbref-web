@@ -58,7 +58,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
     onCloseMobile?.();
     setActiveThreadId(threadId); // immediately show blank chat — no router wait
     setCreating(false);
-    router.push(url); // sync URL in background
+    window.history.pushState(null, '', url); // update URL bar without Next.js navigation/Suspense
 
     // Create thread in background — no await, no blocking the UI
     const supabase = createClient();
