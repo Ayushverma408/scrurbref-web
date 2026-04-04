@@ -29,21 +29,18 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
   const [limitHit, setLimitHit] = useState<{ type: "daily" | "monthly"; reset: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Clear the navigation spinner as soon as this thread's view mounts
+  // Load existing messages — spinner cleared after fetch completes (not on mount)
   const { setIsNavigating } = useThread();
-  useEffect(() => { setIsNavigating(false); }, [setIsNavigating]);
-
-  // Load existing messages
   useEffect(() => {
     async function load() {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) { setIsNavigating(false); return; }
 
       const res = await fetch(`${API_URL}/threads/${threadId}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) { setIsNavigating(false); return; }
       const thread = await res.json();
 
       if (thread.messages.length > 0) {
@@ -57,9 +54,11 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
           }))
         );
       }
+      // Clear spinner now that content is ready (messages loaded or thread is empty)
+      setIsNavigating(false);
     }
     load();
-  }, [threadId]);
+  }, [threadId, setIsNavigating]);
 
   // Auto-scroll on new messages
   useEffect(() => {
