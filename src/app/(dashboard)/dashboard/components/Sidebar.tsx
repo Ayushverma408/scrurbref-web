@@ -41,7 +41,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hydeOpen, setHydeOpen] = useState(true);
   const [creating, setCreating] = useState(false);
-  const { setActiveThreadId } = useThread();
+  const { setActiveThreadId, setIsNavigating } = useThread();
 
   async function createThread(question?: string) {
     if (creating) return;
@@ -56,6 +56,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
       : `/dashboard?thread=${threadId}`;
 
     onCloseMobile?.();
+    setIsNavigating(true);
     setActiveThreadId(threadId); // immediately show blank chat — no router wait
     setCreating(false);
     window.history.pushState(null, '', url); // update URL bar without Next.js navigation/Suspense
@@ -198,7 +199,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
               </p>
               <ul className="space-y-0.5">
                 {pinned.map((thread) => (
-                  <ThreadItem key={thread.id} thread={thread} active={pathname.includes(thread.id)} />
+                  <ThreadItem key={thread.id} thread={thread} active={pathname.includes(thread.id)} onNavigate={() => setIsNavigating(true)} />
                 ))}
               </ul>
               <div className="mx-0 my-2" style={{ borderTop: `1px solid ${s.border}` }} />
@@ -220,7 +221,7 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
             ) : (
               <ul className="space-y-0.5">
                 {recent.map((thread) => (
-                  <ThreadItem key={thread.id} thread={thread} active={pathname.includes(thread.id)} onClose={onCloseMobile} />
+                  <ThreadItem key={thread.id} thread={thread} active={pathname.includes(thread.id)} onClose={onCloseMobile} onNavigate={() => setIsNavigating(true)} />
                 ))}
               </ul>
             )}
@@ -269,12 +270,12 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
   );
 }
 
-function ThreadItem({ thread, active, onClose }: { thread: Thread; active: boolean; onClose?: () => void }) {
+function ThreadItem({ thread, active, onClose, onNavigate }: { thread: Thread; active: boolean; onClose?: () => void; onNavigate?: () => void }) {
   return (
     <li>
       <Link
         href={`/dashboard?thread=${thread.id}`}
-        onClick={onClose}
+        onClick={() => { onNavigate?.(); onClose?.(); }}
         className="block px-2 py-1.5 rounded-lg text-xs font-serif truncate transition-colors"
         style={{
           backgroundColor: active ? "var(--sidebar-border)" : "transparent",

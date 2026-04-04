@@ -13,11 +13,10 @@ export default function DashboardShell() {
   const urlThreadId = searchParams.get("thread");
   const initialQuestion = searchParams.get("q") ?? undefined;
 
-  const { activeThreadId, setActiveThreadId } = useThread();
+  const { activeThreadId, setActiveThreadId, isNavigating, setIsNavigating } = useThread();
 
   // Prefer context (set instantly on click) over URL (set after router round-trip)
   const threadId = activeThreadId ?? urlThreadId;
-
 
   // When Next.js Link navigation changes the URL, trust the URL over context
   useEffect(() => {
@@ -25,6 +24,11 @@ export default function DashboardShell() {
       setActiveThreadId(null);
     }
   }, [urlThreadId, setActiveThreadId]);
+
+  // Clear loading spinner once we have a thread to show
+  useEffect(() => {
+    if (threadId) setIsNavigating(false);
+  }, [threadId, setIsNavigating]);
 
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(
     // If there's a threadId, user must have completed onboarding — skip the check.
@@ -44,6 +48,18 @@ export default function DashboardShell() {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Show spinner immediately when any thread click was registered
+  if (isNavigating && !threadId) {
+    return (
+      <div className="flex-1 flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin opacity-40" />
+          <span className="text-xs font-serif opacity-40">Opening…</span>
+        </div>
+      </div>
+    );
+  }
 
   // If a threadId is active, skip onboarding entirely — show chat immediately.
   if (threadId) {
