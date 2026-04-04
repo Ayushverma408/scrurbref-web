@@ -44,25 +44,31 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
   async function createThread(question?: string) {
     if (creating) return;
     setCreating(true);
-    try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const res = await fetch(`${API_URL}/threads`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) return;
-      const thread = await res.json();
-      onCloseMobile?.();
-      const url = question
-        ? `/dashboard?thread=${thread.id}&q=${encodeURIComponent(question)}`
-        : `/dashboard?thread=${thread.id}`;
-      router.push(url);
-      router.refresh();
-    } finally {
-      setCreating(false);
-    }
+
+    // Generate ID client-side so we can navigate immediately — zero delay on click.
+    // The API call happens in the background; query.ts upserts the thread on first message
+    // as a safety net in case the user types before the POST completes.
+    const threadId = crypto.randomUUID();
+    const url = question
+      ? `/dashboard?thread=${threadId}&q=${encodeURIComponent(question)}`
+      : `/dashboard?thread=${threadId}`;
+
+    onCloseMobile?.();
+    router.push(url); // navigate instantly — blank chat appears immediately
+    setCreating(false); // re-enable button immediately after navigation
+
+    // Create thread in background — no await, no blocking the UI
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    fetch(`${API_URL}/threads`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ id: threadId }),
+    }).then(() => router.refresh()); // refresh sidebar after thread is created
   }
 
   function handleNewConversation() {
@@ -110,26 +116,35 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
           <button
             onClick={handleNewConversation}
             disabled={creating}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-serif transition-colors disabled:opacity-50"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-serif transition-colors disabled:cursor-not-allowed"
             style={{ backgroundColor: s.border, color: s.text }}
-            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#5a3d28")}
+            onMouseOver={(e) => { if (!creating) e.currentTarget.style.backgroundColor = "#5a3d28"; }}
             onMouseOut={(e) => (e.currentTarget.style.backgroundColor = s.border)}
           >
-            <span className="text-base leading-none">+</span>
-            {creating ? "Creating…" : "New conversation"}
+            {creating ? (
+              <>
+                <span className="text-base leading-none animate-spin inline-block">⟳</span>
+                Opening…
+              </>
+            ) : (
+              <>
+                <span className="text-base leading-none">+</span>
+                New conversation
+              </>
+            )}
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
 
-          {/* High-yield this week */}
+          {/* Suggested topics */}
           <div className="px-3 pt-3 pb-1">
             <button
               onClick={() => setHydeOpen((o) => !o)}
               className="w-full flex items-center justify-between px-2 py-1 text-xs font-serif font-semibold uppercase tracking-widest transition-colors"
               style={{ color: s.muted }}
             >
-              <span>📌 High-yield this week</span>
+              <span>📌 Suggested topics</span>
               <span className="text-xs">{hydeOpen ? "▾" : "▸"}</span>
             </button>
 
