@@ -152,7 +152,7 @@ export default function ChatView({ threadId, initialQuestion, initialMode }: Cha
           question,
           threadId,
           freeMode:             false,
-          useHyde:              true,
+          useHyde:              false,
           profilePrompt,
           answerDepth,
           answerTone,

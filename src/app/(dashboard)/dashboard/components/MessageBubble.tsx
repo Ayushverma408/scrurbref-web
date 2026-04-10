@@ -130,7 +130,7 @@ function LatencyBar({ latency }: { latency: MessageLatency }) {
   const fmt = (s?: number) => s != null ? `${s.toFixed(1)}s` : null;
 
   const parts: { label: string; value: string }[] = [];
-  if (latency.hydeS != null)   parts.push({ label: "HyDE",     value: fmt(latency.hydeS)! });
+  if (latency.hydeS != null && latency.hydeS > 0)   parts.push({ label: "HyDE",     value: fmt(latency.hydeS)! });
   if (latency.searchS != null) parts.push({ label: "search",   value: fmt(latency.searchS)! });
   if (latency.rerankS != null) parts.push({ label: "rerank",   value: fmt(latency.rerankS)! });
   if (latency.llmS != null)    parts.push({ label: "generate", value: fmt(latency.llmS)! });
