@@ -1,15 +1,24 @@
 "use client";
 
 import { useRef, useEffect } from "react";
+import { type MessageMode } from "./MessageBubble";
 
 interface ChatInputProps {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   disabled?: boolean;
+  mode: MessageMode;
+  onModeChange: (mode: MessageMode) => void;
 }
 
-export default function ChatInput({ value, onChange, onSubmit, disabled }: ChatInputProps) {
+const MODES: { key: MessageMode; label: string; placeholder: string; submit: string }[] = [
+  { key: "standard", label: "Answer",  placeholder: "Type your question here…",                   submit: "Answer" },
+  { key: "viva",     label: "Viva",    placeholder: "Ask a viva question…",                        submit: "Viva"   },
+  { key: "quiz",     label: "Quiz",    placeholder: "Enter a topic (e.g. Portal hypertension)…",   submit: "Quiz"   },
+];
+
+export default function ChatInput({ value, onChange, onSubmit, disabled, mode, onModeChange }: ChatInputProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // Auto-grow textarea
@@ -27,6 +36,8 @@ export default function ChatInput({ value, onChange, onSubmit, disabled }: ChatI
     }
   }
 
+  const current = MODES.find((m) => m.key === mode) ?? MODES[0];
+
   return (
     <div
       className="px-3 py-3 sm:px-4"
@@ -36,6 +47,26 @@ export default function ChatInput({ value, onChange, onSubmit, disabled }: ChatI
         paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
       }}
     >
+      {/* Mode toggle */}
+      <div className="flex items-center gap-1 mb-2">
+        {MODES.map((m) => (
+          <button
+            key={m.key}
+            onClick={() => !disabled && onModeChange(m.key)}
+            disabled={disabled}
+            className="px-3 py-1 rounded-full font-serif text-xs transition-colors disabled:opacity-40"
+            style={
+              mode === m.key
+                ? { backgroundColor: "var(--ink)", color: "var(--papyrus)" }
+                : { backgroundColor: "var(--papyrus-light)", border: "1px solid var(--papyrus-border)", color: "var(--ink-muted)" }
+            }
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Input container */}
       <div
         className="flex items-end gap-2 rounded-xl px-3 py-2"
         style={{
@@ -52,7 +83,7 @@ export default function ChatInput({ value, onChange, onSubmit, disabled }: ChatI
             value={value}
             onChange={(e) => onChange(e.target.value.slice(0, 2000))}
             onKeyDown={handleKeyDown}
-            placeholder="Type your question here…"
+            placeholder={current.placeholder}
             disabled={disabled}
             rows={1}
             maxLength={2000}
@@ -74,7 +105,7 @@ export default function ChatInput({ value, onChange, onSubmit, disabled }: ChatI
           className="shrink-0 px-4 py-2 rounded-lg text-sm font-serif font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ backgroundColor: "var(--ink)", color: "var(--papyrus)" }}
         >
-          Answer
+          {current.submit}
         </button>
       </div>
     </div>

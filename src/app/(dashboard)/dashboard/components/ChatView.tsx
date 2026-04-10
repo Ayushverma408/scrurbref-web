@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import MessageBubble, { type Message, type MessageStatus, type MessageLatency } from "./MessageBubble";
+import MessageBubble, { type Message, type MessageStatus, type MessageLatency, type MessageMode, type MCQ } from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import { type Chunk } from "./SourcesPanel";
 import { type ScrapedImage } from "./ImagesPanel";
@@ -19,18 +19,24 @@ const SUB_PHASE_LABELS: Record<string, string> = {
 
 interface ChatViewProps {
   threadId: string;
-  initialQuestion?: string; // pre-fill from example question click
+  initialQuestion?: string;
+}
+
+function tryParseJSON(s: string): any[] {
+  try { return JSON.parse(s); } catch { return []; }
 }
 
 export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState(initialQuestion ?? "");
+  const [messages, setMessages]   = useState<Message[]>([]);
+  const [input, setInput]         = useState(initialQuestion ?? "");
   const [streaming, setStreaming] = useState(false);
-  const [limitHit, setLimitHit] = useState<{ type: "daily" | "monthly"; reset: string } | null>(null);
+  const [mode, setMode]           = useState<MessageMode>("standard");
+  const [limitHit, setLimitHit]   = useState<{ type: "daily" | "monthly"; reset: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load existing messages — spinner cleared after fetch completes (not on mount)
   const { setIsNavigating } = useThread();
+
+  // Load existing thread messages
   useEffect(() => {
     async function load() {
       const supabase = createClient();
@@ -45,16 +51,20 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
 
       if (thread.messages.length > 0) {
         setMessages(
-          thread.messages.map((m: any) => ({
-            id:      m.id,
-            role:    m.role,
-            content: m.content,
-            chunks:  m.chunkRefs ?? [],
-            status:  "done" as MessageStatus,
-          }))
+          thread.messages.map((m: any) => {
+            const isQuiz = m.pipeline === "quiz";
+            return {
+              id:      m.id,
+              role:    m.role,
+              content: isQuiz ? "" : m.content,
+              mcqs:    isQuiz ? tryParseJSON(m.content) : undefined,
+              mode:    isQuiz ? "quiz" : undefined,
+              chunks:  m.chunkRefs ?? [],
+              status:  "done" as MessageStatus,
+            };
+          })
         );
       }
-      // Clear spinner now that content is ready (messages loaded or thread is empty)
       setIsNavigating(false);
     }
     load();
@@ -65,26 +75,30 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-send if initialQuestion provided (from example question click)
+  // Auto-send if initialQuestion provided
   const autoSentRef = useRef(false);
   useEffect(() => {
     if (initialQuestion && !autoSentRef.current && messages.length === 0) {
       autoSentRef.current = true;
       setInput(initialQuestion);
-      // Small delay to let state settle, then send
-      setTimeout(() => {
-        sendMessageText(initialQuestion);
-      }, 100);
+      setTimeout(() => { sendMessage(initialQuestion); }, 100);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuestion]);
 
-  async function sendMessageText(question: string) {
-    if (!question || streaming) return;
+  async function sendMessage(text: string) {
+    if (!text || streaming) return;
 
+    if (mode === "quiz") {
+      await sendQuiz(text);
+    } else {
+      await sendQuery(text);
+    }
+  }
+
+  async function sendQuery(question: string) {
     setInput("");
     setStreaming(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
 
     const userMsg: Message = {
       id:      crypto.randomUUID(),
@@ -92,8 +106,7 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       content: question,
       status:  "done",
     };
-
-    const assistantId = crypto.randomUUID();
+    const assistantId  = crypto.randomUUID();
     const assistantMsg: Message = {
       id:      assistantId,
       role:    "assistant",
@@ -101,8 +114,8 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       status:  "retrieving",
       chunks:  [],
       images:  [],
+      mode:    mode,
     };
-
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
     try {
@@ -110,12 +123,11 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      // Get user settings from metadata
       const { data: { user } } = await supabase.auth.getUser();
       const meta = user?.user_metadata ?? {};
-      const profilePrompt        = meta.profile_prompt        ?? "";
-      const answerDepth          = meta.answer_depth          ?? "balanced";
-      const answerTone           = meta.answer_tone           ?? "teaching";
+      const profilePrompt         = meta.profile_prompt         ?? "";
+      const answerDepth           = meta.answer_depth           ?? "balanced";
+      const answerTone            = meta.answer_tone            ?? "teaching";
       const answerRestrictiveness = meta.answer_restrictiveness ?? "guided";
 
       const res = await fetch(`${API_URL}/query/stream`, {
@@ -127,17 +139,18 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
         body: JSON.stringify({
           question,
           threadId,
-          freeMode: false,
-          useHyde: true,
+          freeMode:             false,
+          useHyde:              true,
           profilePrompt,
           answerDepth,
           answerTone,
           answerRestrictiveness,
+          vivaMode:             mode === "viva",
         }),
       });
 
       if (res.status === 429) {
-        const err = await res.json().catch(() => ({}));
+        const err  = await res.json().catch(() => ({}));
         const type = err.reset === "tomorrow" ? "daily" : "monthly";
         setLimitHit({ type, reset: err.reset });
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
@@ -148,9 +161,9 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
         throw new Error(err.error ?? `HTTP ${res.status}`);
       }
 
-      const reader = res.body!.getReader();
+      const reader  = res.body!.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buffer    = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -163,7 +176,6 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
         for (const event of events) {
           const dataLine = event.split("\n").find((l) => l.startsWith("data: "));
           if (!dataLine) continue;
-
           try {
             const data = JSON.parse(dataLine.slice(6));
 
@@ -197,22 +209,23 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
               );
             } else if (data.phase === "done") {
               const latency: MessageLatency = {
-                hydeS:     data.latency_hyde_s,
-                embedS:    data.latency_embed_s,
-                searchS:   data.latency_search_s,
-                rerankS:   data.latency_rerank_s,
-                llmS:      data.latency_llm_s,
-                totalS:    data.latency_total_s,
+                hydeS:   data.latency_hyde_s,
+                embedS:  data.latency_embed_s,
+                searchS: data.latency_search_s,
+                rerankS: data.latency_rerank_s,
+                llmS:    data.latency_llm_s,
+                totalS:  data.latency_total_s,
               };
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
-                        content: data.answer ?? "",
-                        chunks:  data.chunks ?? [],
-                        images:  (data.images ?? []) as ScrapedImage[],
-                        status:  "done",
+                        content:    data.answer ?? "",
+                        chunks:     data.chunks ?? [],
+                        images:     (data.images ?? []) as ScrapedImage[],
+                        pubmedRefs: data.pubmed_refs ?? [],
+                        status:     "done",
                         latency,
                       }
                     : m
@@ -227,9 +240,7 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
                 )
               );
             }
-          } catch {
-            // malformed SSE event — skip
-          }
+          } catch { /* malformed SSE — skip */ }
         }
       }
     } catch (err: any) {
@@ -245,6 +256,150 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
     }
   }
 
+  async function sendQuiz(topic: string) {
+    setInput("");
+    setStreaming(true);
+
+    const userMsg: Message = {
+      id:      crypto.randomUUID(),
+      role:    "user",
+      content: `Quiz: ${topic}`,
+      status:  "done",
+    };
+    const assistantId  = crypto.randomUUID();
+    const assistantMsg: Message = {
+      id:      assistantId,
+      role:    "assistant",
+      content: "",
+      status:  "retrieving",
+      chunks:  [],
+      mode:    "quiz",
+    };
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch(`${API_URL}/quiz/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ topic, count: 5, threadId }),
+      });
+
+      if (res.status === 429) {
+        const err  = await res.json().catch(() => ({}));
+        const type = err.reset === "tomorrow" ? "daily" : "monthly";
+        setLimitHit({ type, reset: err.reset });
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+
+      const reader  = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer    = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const event of events) {
+          const dataLine = event.split("\n").find((l) => l.startsWith("data: "));
+          if (!dataLine) continue;
+          try {
+            const data = JSON.parse(dataLine.slice(6));
+
+            if (data.phase === "retrieving") {
+              setMessages((prev) =>
+                prev.map((m) => m.id === assistantId ? { ...m, status: "retrieving" } : m)
+              );
+            } else if (data.phase === "retrieved") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, status: "generating", chunks: data.chunks ?? [] }
+                    : m
+                )
+              );
+            } else if (data.phase === "generating") {
+              setMessages((prev) =>
+                prev.map((m) => m.id === assistantId ? { ...m, status: "generating" } : m)
+              );
+            } else if (data.phase === "done") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        mcqs:   (data.mcqs ?? []) as MCQ[],
+                        chunks: data.chunks ?? [],
+                        status: "done",
+                      }
+                    : m
+                )
+              );
+            } else if (data.phase === "error") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: data.msg ?? "An error occurred.", status: "error" }
+                    : m
+                )
+              );
+            }
+          } catch { /* malformed SSE — skip */ }
+        }
+      }
+    } catch (err: any) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: err.message ?? "Something went wrong.", status: "error" }
+            : m
+        )
+      );
+    } finally {
+      setStreaming(false);
+    }
+  }
+
+  const exampleQuestions = [
+    "Steps of a Whipple for pancreatic head cancer",
+    "Anatomical basis of posterior adrenalectomy",
+    "Management of CBD injury found intraoperatively",
+    "Blood supply to the oesophagus and implications for oesophagectomy",
+    "Layers of the anterior abdominal wall",
+    "Indications for damage control laparotomy",
+  ];
+
+  const exampleTopics = [
+    "Hepatic anatomy",
+    "Portal hypertension",
+    "Pancreatic head resection",
+    "Bile duct anatomy",
+    "Abdominal wall hernias",
+    "Colorectal anatomy",
+  ];
+
+  const examples = mode === "quiz" ? exampleTopics : exampleQuestions;
+  const emptySubtitle = mode === "quiz"
+    ? "Pick a topic and get 5 textbook-sourced MCQs with page citations."
+    : mode === "viva"
+    ? "Ask a question and get a structured viva answer — direct, cited, with a likely follow-up."
+    : "Answers grounded in 4 surgical textbooks — every claim is citable.";
+
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
@@ -252,22 +407,13 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full px-4 py-10 text-center select-none">
             <p className="font-serif text-2xl font-semibold text-ink mb-1">What do you want to look up?</p>
-            <p className="font-serif text-sm text-ink-muted mb-8">
-              Answers grounded in 4 surgical textbooks — every claim is citable.
-            </p>
+            <p className="font-serif text-sm text-ink-muted mb-8">{emptySubtitle}</p>
 
             <div className="w-full max-w-xl grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                "Steps of a Whipple for pancreatic head cancer",
-                "Anatomical basis of posterior adrenalectomy",
-                "Management of CBD injury found intraoperatively",
-                "Blood supply to the oesophagus and implications for oesophagectomy",
-                "Layers of the anterior abdominal wall",
-                "Indications for damage control laparotomy",
-              ].map((q) => (
+              {examples.map((q) => (
                 <button
                   key={q}
-                  onClick={() => !streaming && sendMessageText(q)}
+                  onClick={() => !streaming && sendMessage(q)}
                   disabled={streaming}
                   className="text-left px-4 py-3 rounded-xl font-serif text-sm text-ink-muted transition-colors hover:text-ink disabled:opacity-40"
                   style={{
@@ -275,7 +421,7 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
                     border: "1px solid var(--papyrus-border)",
                   }}
                 >
-                  {q}
+                  {mode === "quiz" ? `Quiz: ${q}` : q}
                 </button>
               ))}
             </div>
@@ -310,8 +456,10 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
         <ChatInput
           value={input}
           onChange={setInput}
-          onSubmit={() => sendMessageText(input.trim())}
+          onSubmit={() => sendMessage(input.trim())}
           disabled={streaming}
+          mode={mode}
+          onModeChange={setMode}
         />
       )}
     </div>
