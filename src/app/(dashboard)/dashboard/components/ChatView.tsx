@@ -21,17 +21,18 @@ const SUB_PHASE_LABELS: Record<string, string> = {
 interface ChatViewProps {
   threadId: string;
   initialQuestion?: string;
+  initialMode?: MessageMode;
 }
 
 function tryParseJSON(s: string): any[] {
   try { return JSON.parse(s); } catch { return []; }
 }
 
-export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
+export default function ChatView({ threadId, initialQuestion, initialMode }: ChatViewProps) {
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState(initialQuestion ?? "");
   const [streaming, setStreaming] = useState(false);
-  const [mode, setMode]           = useState<MessageMode>("standard");
+  const [mode, setMode]           = useState<MessageMode>(initialMode ?? "standard");
   const [limitHit, setLimitHit]   = useState<{ type: "daily" | "monthly"; reset: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 

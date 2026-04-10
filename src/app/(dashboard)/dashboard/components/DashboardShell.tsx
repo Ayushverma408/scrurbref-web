@@ -12,6 +12,7 @@ export default function DashboardShell() {
   const searchParams = useSearchParams();
   const urlThreadId = searchParams.get("thread");
   const initialQuestion = searchParams.get("q") ?? undefined;
+  const initialMode = (searchParams.get("mode") ?? undefined) as import("./MessageBubble").MessageMode | undefined;
 
   const { activeThreadId, setActiveThreadId, isNavigating, setIsNavigating } = useThread();
 
@@ -47,7 +48,7 @@ export default function DashboardShell() {
   let content: React.ReactNode;
   if (threadId) {
     // key={threadId} forces remount on every thread switch so ChatView clears the spinner on mount
-    content = <ChatView key={threadId} threadId={threadId} initialQuestion={initialQuestion} />;
+    content = <ChatView key={threadId} threadId={threadId} initialQuestion={initialQuestion} initialMode={initialMode} />;
   } else if (onboardingDone === null) {
     content = null;
   } else if (!onboardingDone) {
