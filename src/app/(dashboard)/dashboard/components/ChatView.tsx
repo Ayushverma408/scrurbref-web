@@ -127,7 +127,16 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
 
       const { data: { user } } = await supabase.auth.getUser();
       const meta = user?.user_metadata ?? {};
-      const profilePrompt         = meta.profile_prompt         ?? "";
+
+      // Build profile context: structured identity first (specialty/year), then free-text notes.
+      // This is WHO the user is — answer style is controlled by the structured settings below.
+      const identityParts: string[] = [];
+      if (meta.training_year) identityParts.push(meta.training_year);
+      if (meta.specialty)     identityParts.push(meta.specialty);
+      const identityLine   = identityParts.join(", ");
+      const freeText       = (meta.profile_prompt ?? "").trim();
+      const profilePrompt  = [identityLine, freeText].filter(Boolean).join(". ");
+
       const answerDepth           = meta.answer_depth           ?? "balanced";
       const answerTone            = meta.answer_tone            ?? "teaching";
       const answerRestrictiveness = meta.answer_restrictiveness ?? "guided";

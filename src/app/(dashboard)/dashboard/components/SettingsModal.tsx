@@ -175,17 +175,37 @@ export default function SettingsModal({ onClose, userEmail }: SettingsModalProps
           ))}
         </div>
 
-        {/* Profile prompt */}
-        <p className="text-xs font-serif font-medium text-ink mb-1">Your profile context</p>
+        {/* Who you are — sent with every query so ScrubRef can tailor examples */}
+        <p className="text-xs font-serif font-medium text-ink mb-1">Your background</p>
         <p className="text-xs font-serif text-ink-faint mb-2">
-          Sent with every question. Edit freely.
+          Who you are — year, specialty, exam goal. Sent with every query so ScrubRef can tailor examples. Answer style is set by the options above.
         </p>
+        <div className="flex gap-2 mb-2">
+          <input
+            value={trainingYear}
+            onChange={(e) => setTrainingYear(e.target.value)}
+            placeholder="Year (e.g. MS2, MCh Y1)"
+            className="flex-1 px-3 py-2 rounded-lg text-xs font-serif text-ink outline-none"
+            style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)" }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--ink-muted)")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--papyrus-border)")}
+          />
+          <input
+            value={specialty}
+            onChange={(e) => setSpecialty(e.target.value)}
+            placeholder="Specialty (e.g. GI Surgery)"
+            className="flex-1 px-3 py-2 rounded-lg text-xs font-serif text-ink outline-none"
+            style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)" }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--ink-muted)")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--papyrus-border)")}
+          />
+        </div>
         <textarea
           value={profilePrompt}
           onChange={(e) => setProfilePrompt(e.target.value)}
-          rows={5}
-          placeholder="e.g. I am a JR2 in MS General Surgery preparing for NEET-SS…"
-          className="w-full px-3 py-2 rounded-lg text-xs font-serif text-ink leading-relaxed outline-none resize-none mb-1"
+          rows={3}
+          placeholder="Additional context — e.g. preparing for NEET-SS, weak on HPB anatomy…"
+          className="w-full px-3 py-2 rounded-lg text-xs font-serif text-ink leading-relaxed outline-none resize-none mb-3"
           style={{
             backgroundColor: "var(--papyrus)",
             border: "1px solid var(--papyrus-border)",
@@ -193,11 +213,6 @@ export default function SettingsModal({ onClose, userEmail }: SettingsModalProps
           onFocus={(e) => (e.currentTarget.style.borderColor = "var(--ink-muted)")}
           onBlur={(e) => (e.currentTarget.style.borderColor = "var(--papyrus-border)")}
         />
-        {specialty && trainingYear && (
-          <p className="text-xs font-serif text-ink-faint mb-3">
-            {trainingYear} · {specialty}
-          </p>
-        )}
 
         {/* Save */}
         <button
