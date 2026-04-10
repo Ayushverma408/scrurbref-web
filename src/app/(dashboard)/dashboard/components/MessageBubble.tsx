@@ -2,8 +2,65 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import SourcesPanel, { type Chunk } from "./SourcesPanel";
+import { type Chunk } from "./SourcesPanel";
 import ImagesPanel, { type ScrapedImage } from "./ImagesPanel";
+import PagePreviewModal from "./PagePreviewModal";
+
+// ── Inline citation processing ─────────────────────────────────────────────
+
+interface InlineCite {
+  n:         number;
+  bookFull:  string;
+  bookShort: string;
+  page:      number;
+  chunk?:    Chunk;  // matched retrieved chunk for preview
+}
+
+function shortenBook(full: string): string {
+  const lower = full.toLowerCase();
+  if (lower.includes("fischer"))     return "Fischer's";
+  if (lower.includes("sabiston"))    return "Sabiston";
+  if (lower.includes("shackelford")) return "Shackelford";
+  if (lower.includes("blumgart"))    return "Blumgart";
+  return full.split(/\s+/)[0];
+}
+
+function processCitations(
+  content: string,
+  chunks: Chunk[] = [],
+): { processed: string; cites: InlineCite[] } {
+  const cites: InlineCite[] = [];
+  const seen  = new Map<string, number>(); // "book-page" → n
+
+  // Matches: (Book Name, Page N) and _(Book Name, Page N)_
+  const pattern = /_?\(([^()]+),\s*[Pp]age\s*(\d+)\)_?/g;
+
+  const processed = content.replace(pattern, (_, bookFull, pageStr) => {
+    const book = bookFull.trim();
+    const page = parseInt(pageStr, 10);
+    if (isNaN(page)) return _;
+
+    const key = `${book.toLowerCase()}-${page}`;
+    if (!seen.has(key)) {
+      const n = cites.length + 1;
+      seen.set(key, n);
+      const short = shortenBook(book);
+      const chunk = chunks.find((c) =>
+        c.page === page &&
+        (c.source.toLowerCase().includes(short.toLowerCase().replace("'s", "")) ||
+         book.toLowerCase().includes(c.source.toLowerCase().split(/\s+/)[0]))
+      );
+      cites.push({ n, bookFull: book, bookShort: short, page, chunk });
+    }
+
+    const n = seen.get(key)!;
+    const cite = cites[n - 1] ?? { bookShort: shortenBook(book), page };
+    // Embed display text in link so the a-override can render a pill without a lookup
+    return `[${cite.bookShort}·${page}](#cite-${n})`;
+  });
+
+  return { processed, cites };
+}
 
 export type MessageStatus = "retrieving" | "generating" | "done" | "error";
 export type MessageMode   = "standard" | "viva" | "quiz";
@@ -212,6 +269,169 @@ function PubMedPanel({ refs }: { refs: PubMedRef[] }) {
   );
 }
 
+function CitePopover({ cite, onPreview, onClose }: {
+  cite: InlineCite;
+  onPreview: (chunk: Chunk) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-5 shadow-xl"
+        style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="font-serif text-sm font-semibold text-ink leading-snug">{cite.bookFull}</p>
+            <p className="font-serif text-xs text-ink-muted mt-0.5">Page {cite.page}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="font-serif text-lg leading-none text-ink-faint hover:text-ink transition-colors ml-4"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Chunk excerpt */}
+        {cite.chunk ? (
+          <div
+            className="font-serif text-xs text-ink-muted leading-relaxed max-h-44 overflow-y-auto px-3 py-2 rounded-xl mb-4"
+            style={{ backgroundColor: "var(--papyrus-light)", border: "1px solid var(--papyrus-border)" }}
+          >
+            {cite.chunk.content.slice(0, 600)}{cite.chunk.content.length > 600 ? "…" : ""}
+          </div>
+        ) : (
+          <p className="font-serif text-xs text-ink-faint italic mb-4">No passage preview available for this citation.</p>
+        )}
+
+        {/* Actions */}
+        {cite.chunk && (
+          <button
+            onClick={() => { onPreview(cite.chunk!); onClose(); }}
+            className="w-full font-serif text-sm font-medium py-2.5 rounded-xl transition-opacity hover:opacity-80"
+            style={{ backgroundColor: "var(--accent)", color: "var(--papyrus)" }}
+          >
+            View PDF page →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AnswerBubble({ message, isViva }: { message: Message; isViva: boolean }) {
+  const [selectedCite, setSelectedCite] = useState<InlineCite | null>(null);
+  const [previewChunk, setPreviewChunk]  = useState<Chunk | null>(null);
+  const { processed, cites } = processCitations(message.content, message.chunks ?? []);
+
+  // Map n → InlineCite so the ReactMarkdown a-override can look up by number
+  const citesMap = new Map(cites.map((c) => [c.n, c]));
+
+  return (
+    <>
+      <div
+        className="px-5 py-4 rounded-2xl font-serif text-sm leading-relaxed text-ink prose-custom"
+        style={{
+          backgroundColor: "var(--papyrus-light)",
+          border: "1px solid var(--papyrus-border)",
+        }}
+      >
+        {isViva && (
+          <span
+            className="inline-block font-serif text-xs font-medium px-2 py-0.5 rounded-full mb-3"
+            style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)", color: "var(--ink-muted)" }}
+          >
+            Viva
+          </span>
+        )}
+
+        <ReactMarkdown
+          components={{
+            p:          ({ children }) => <p className="mb-3 last:mb-0 font-serif text-sm leading-relaxed">{children}</p>,
+            strong:     ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+            em:         ({ children }) => <em className="italic">{children}</em>,
+            h1:         ({ children }) => <h1 className="font-serif text-lg font-semibold text-ink mt-4 mb-2">{children}</h1>,
+            h2:         ({ children }) => <h2 className="font-serif text-base font-semibold text-ink mt-3 mb-2">{children}</h2>,
+            h3:         ({ children }) => <h3 className="font-serif text-sm font-semibold text-ink mt-2 mb-1">{children}</h3>,
+            ul:         ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
+            ol:         ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
+            li:         ({ children }) => <li className="font-serif text-sm leading-relaxed">{children}</li>,
+            code:       ({ children }) => (
+              <code className="font-mono text-xs px-1 py-0.5 rounded" style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)" }}>
+                {children}
+              </code>
+            ),
+            blockquote: ({ children }) => (
+              <blockquote className="pl-3 my-2 font-serif italic text-ink-muted" style={{ borderLeft: "3px solid var(--papyrus-border)" }}>
+                {children}
+              </blockquote>
+            ),
+            // Intercept [Book·page](#cite-n) links → render as inline pill
+            a: ({ href, children }) => {
+              if (href?.startsWith("#cite-")) {
+                const n   = parseInt(href.replace("#cite-", ""), 10);
+                const raw = Array.isArray(children) ? children.join("") : String(children ?? "");
+                const [book, page] = raw.split("·");
+                return (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="inline-flex items-center gap-1 font-serif text-xs cursor-pointer select-none transition-opacity hover:opacity-70 mx-0.5"
+                    style={{
+                      backgroundColor: "var(--papyrus)",
+                      border: "1px solid var(--accent)",
+                      borderRadius: "9999px",
+                      padding: "0px 6px",
+                      color: "var(--accent)",
+                      verticalAlign: "middle",
+                      lineHeight: "1.6",
+                    }}
+                    onClick={() => {
+                      const cite = citesMap.get(n);
+                      if (cite) setSelectedCite(cite);
+                    }}
+                  >
+                    <span>{book}</span>
+                    <span style={{ opacity: 0.5 }}>·</span>
+                    <span>{page}</span>
+                  </span>
+                );
+              }
+              return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+            },
+          }}
+        >
+          {processed}
+        </ReactMarkdown>
+      </div>
+
+      {selectedCite && (
+        <CitePopover
+          cite={selectedCite}
+          onPreview={setPreviewChunk}
+          onClose={() => setSelectedCite(null)}
+        />
+      )}
+
+      {previewChunk && (
+        <PagePreviewModal
+          collection={previewChunk.collection}
+          page={previewChunk.page}
+          source={previewChunk.source}
+          chunkContent={previewChunk.content}
+          onClose={() => setPreviewChunk(null)}
+        />
+      )}
+    </>
+  );
+}
+
 export default function MessageBubble({ message }: { message: Message }) {
   if (message.role === "user") {
     return (
@@ -265,52 +485,7 @@ export default function MessageBubble({ message }: { message: Message }) {
 
         {/* Standard / Viva — answer text */}
         {!isQuiz && message.content && (
-          <div
-            className="px-5 py-4 rounded-2xl font-serif text-sm leading-relaxed text-ink prose-custom"
-            style={{
-              backgroundColor: "var(--papyrus-light)",
-              border: "1px solid var(--papyrus-border)",
-            }}
-          >
-            {isViva && (
-              <span
-                className="inline-block font-serif text-xs font-medium px-2 py-0.5 rounded-full mb-3"
-                style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)", color: "var(--ink-muted)" }}
-              >
-                Viva
-              </span>
-            )}
-            <ReactMarkdown
-              components={{
-                p:          ({ children }) => <p className="mb-3 last:mb-0 font-serif text-sm leading-relaxed">{children}</p>,
-                strong:     ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
-                em:         ({ children }) => <em className="italic">{children}</em>,
-                h1:         ({ children }) => <h1 className="font-serif text-lg font-semibold text-ink mt-4 mb-2">{children}</h1>,
-                h2:         ({ children }) => <h2 className="font-serif text-base font-semibold text-ink mt-3 mb-2">{children}</h2>,
-                h3:         ({ children }) => <h3 className="font-serif text-sm font-semibold text-ink mt-2 mb-1">{children}</h3>,
-                ul:         ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
-                ol:         ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
-                li:         ({ children }) => <li className="font-serif text-sm leading-relaxed">{children}</li>,
-                code:       ({ children }) => (
-                  <code className="font-mono text-xs px-1 py-0.5 rounded" style={{ backgroundColor: "var(--papyrus)", border: "1px solid var(--papyrus-border)" }}>
-                    {children}
-                  </code>
-                ),
-                blockquote: ({ children }) => (
-                  <blockquote className="pl-3 my-2 font-serif italic text-ink-muted" style={{ borderLeft: "3px solid var(--papyrus-border)" }}>
-                    {children}
-                  </blockquote>
-                ),
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
-          </div>
-        )}
-
-        {/* Sources — shown as soon as chunks arrive */}
-        {!isQuiz && (status === "generating" || status === "done") && message.chunks && message.chunks.length > 0 && (
-          <SourcesPanel chunks={message.chunks} />
+          <AnswerBubble message={message} isViva={isViva} />
         )}
 
         {/* Scraped figures */}
