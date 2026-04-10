@@ -74,53 +74,41 @@ const RESTRICTIVENESS_OPTIONS = [
   },
 ];
 
-function generateProfilePrompt(
-  specialty: string,
-  year: string,
-  depth: string,
-  tone: string
-): string {
+// Generates identity-only context — WHO the user is.
+// Answer style (depth, tone, knowledge source) is controlled by the structured settings
+// and injected separately via chain.py — never baked into this string.
+function generateProfilePrompt(specialty: string, year: string): string {
   const levelContext: Record<string, string> = {
-    JR1: "I am building foundational knowledge in surgical anatomy, basic operative steps, and perioperative care.",
-    JR2: "I am developing operative skills and deepening my understanding of surgical technique and anatomical landmarks.",
-    JR3: "I am consolidating advanced operative knowledge and preparing for surgical exit examinations.",
-    "Senior Resident": "I am at a senior level, focusing on complex cases, operative decision-making, and exam preparation.",
-    Fellow: "I have completed core surgical training and am focusing on advanced subspecialty technique and evidence-based practice.",
-    Consultant: "I am a practising consultant looking up specific operative details, anatomy, and textbook references.",
+    JR1: "Building foundational surgical anatomy, basic operative steps, and perioperative care.",
+    JR2: "Developing operative skills and deepening understanding of surgical technique and anatomical landmarks.",
+    JR3: "Consolidating advanced operative knowledge and preparing for surgical exit examinations.",
+    "Senior Resident": "Focusing on complex cases, operative decision-making, and exam preparation.",
+    Fellow: "Advanced subspecialty technique and evidence-based practice.",
+    Consultant: "Looking up specific operative details, anatomy, and textbook references.",
   };
 
   const bookContext: Record<string, string> = {
-    "MCh HPB Surgery": "I rely heavily on Blumgart's HPB Surgery and Fischer's Mastery of Surgery.",
-    "MCh GI Surgery": "I rely on Shackelford's Surgery of the Alimentary Tract and Fischer's Mastery of Surgery.",
-    "MCh Vascular Surgery": "I rely on Fischer's Mastery of Surgery for vascular anatomy and technique.",
-    "MCh Cardiothoracic Surgery": "I use Fischer's Mastery of Surgery for thoracic surgical references.",
-    default: "I study primarily from Fischer's Mastery of Surgery, Sabiston, Shackelford, and Blumgart.",
+    "MCh HPB Surgery": "Relies heavily on Blumgart's HPB Surgery and Fischer's Mastery of Surgery.",
+    "MCh GI Surgery": "Relies on Shackelford's Surgery of the Alimentary Tract and Fischer's Mastery of Surgery.",
+    "MCh Vascular Surgery": "Relies on Fischer's Mastery of Surgery for vascular anatomy and technique.",
+    "MCh Cardiothoracic Surgery": "Uses Fischer's Mastery of Surgery for thoracic surgical references.",
+    default: "",
   };
 
-  const depthInstruction: Record<string, string> = {
-    concise: "Keep answers precise and concise — key facts, operative steps, and citations only. Do not elaborate beyond what is asked.",
-    balanced: "Provide a well-rounded answer with core detail and enough context to understand the clinical reasoning. Cite textbook pages.",
-    comprehensive: "Give a comprehensive, deeply explanatory answer. Cover the underlying anatomy, physiology, and surgical reasoning fully. Explain concepts as if teaching — the longer and more thorough, the better. Always cite textbook pages.",
-  };
-
-  const toneInstruction: Record<string, string> = {
-    textbook: "Stay strictly grounded in textbook content. Avoid editorialising — report what Fischer, Sabiston, Shackelford, or Blumgart say.",
-    teaching: "Use a teaching tone — explain why things are done, not just what. Think of the style of a senior surgeon explaining at the operating table.",
-  };
-
-  const level = levelContext[year] ?? levelContext["JR2"];
+  const level = levelContext[year] ?? "";
   const books = bookContext[specialty] ?? bookContext["default"];
-  const depthInstr = depthInstruction[depth] ?? depthInstruction["balanced"];
-  const toneInstr = toneInstruction[tone] ?? toneInstruction["teaching"];
 
-  return `I am a ${year} in ${specialty}. ${level} ${books}\n\n${depthInstr} ${toneInstr}`;
+  const parts = [`${year}, ${specialty}`];
+  if (level) parts.push(level);
+  if (books) parts.push(books);
+  return parts.join(" ");
 }
 
 interface OnboardingCardProps {
   onComplete: () => void;
 }
 
-type Step = "specialty" | "year" | "style" | "prompt";
+type Step = "specialty" | "year" | "style";
 
 export default function OnboardingCard({ onComplete }: OnboardingCardProps) {
   const [step, setStep] = useState<Step>("specialty");
@@ -129,7 +117,6 @@ export default function OnboardingCard({ onComplete }: OnboardingCardProps) {
   const [depth, setDepth] = useState("");
   const [tone, setTone] = useState("");
   const [restrictiveness, setRestrictiveness] = useState("");
-  const [prompt, setPrompt] = useState("");
   const [saving, setSaving] = useState(false);
 
   function handleSpecialtySelect(s: string) {
@@ -142,29 +129,21 @@ export default function OnboardingCard({ onComplete }: OnboardingCardProps) {
     setStep("style");
   }
 
-  function handleStyleContinue() {
-    // Use defaults for anything not selected
+  async function handleStyleSave() {
+    setSaving(true);
     const d = depth || "balanced";
     const t = tone || "teaching";
     const r = restrictiveness || "guided";
-    setDepth(d);
-    setTone(t);
-    setRestrictiveness(r);
-    setPrompt(generateProfilePrompt(specialty, year, d, t));
-    setStep("prompt");
-  }
-
-  async function handleSave() {
-    setSaving(true);
     const supabase = createClient();
     await supabase.auth.updateUser({
       data: {
         specialty,
         training_year: year,
-        answer_depth: depth,
-        answer_tone: tone,
-        answer_restrictiveness: restrictiveness,
-        profile_prompt: prompt,
+        answer_depth: d,
+        answer_tone: t,
+        answer_restrictiveness: r,
+        // Identity-only context — style is handled by the structured settings above
+        profile_prompt: generateProfilePrompt(specialty, year),
       },
     });
     setSaving(false);
@@ -172,10 +151,9 @@ export default function OnboardingCard({ onComplete }: OnboardingCardProps) {
   }
 
   const stepNumber: Record<Step, string> = {
-    specialty: "Step 1 of 4",
-    year: "Step 2 of 4",
-    style: "Step 3 of 4",
-    prompt: "Step 4 of 4",
+    specialty: "Step 1 of 3",
+    year: "Step 2 of 3",
+    style: "Step 3 of 3",
   };
 
   return (
@@ -291,54 +269,14 @@ export default function OnboardingCard({ onComplete }: OnboardingCardProps) {
             </div>
 
             <button
-              onClick={handleStyleContinue}
-              className="w-full py-2.5 rounded-lg text-sm font-serif font-medium transition-colors mb-2"
+              onClick={handleStyleSave}
+              disabled={saving}
+              className="w-full py-2.5 rounded-lg text-sm font-serif font-medium transition-colors disabled:opacity-50 mb-2"
               style={{ backgroundColor: "var(--ink)", color: "var(--papyrus)" }}
             >
-              Continue →
+              {saving ? "Saving…" : "Start using ScrubRef →"}
             </button>
             <BackButton onClick={() => setStep("year")} />
-          </>
-        )}
-
-        {/* ── Step 4: Review & edit prompt ── */}
-        {step === "prompt" && (
-          <>
-            <h2 className="font-serif text-2xl font-semibold text-ink mb-2">
-              We wrote this for you.
-            </h2>
-            <p className="font-serif text-ink-muted text-sm mb-4">
-              This is sent with every question to personalise your answers. Edit it however you like — add exam goals, areas of focus, anything.
-            </p>
-
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={6}
-              className="w-full px-4 py-3 rounded-xl text-sm font-serif text-ink leading-relaxed outline-none resize-none"
-              style={{
-                backgroundColor: "var(--papyrus)",
-                border: "1px solid var(--papyrus-border)",
-              }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--ink-muted)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--papyrus-border)")}
-            />
-
-            <p className="text-xs font-serif text-ink-faint mt-2 mb-5">
-              You can always edit this in ⚙︎ Settings.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 py-2.5 rounded-lg text-sm font-serif font-medium transition-colors disabled:opacity-50"
-                style={{ backgroundColor: "var(--ink)", color: "var(--papyrus)" }}
-              >
-                {saving ? "Saving…" : "Start using ScrubRef →"}
-              </button>
-              <BackButton onClick={() => setStep("style")} />
-            </div>
           </>
         )}
       </div>
