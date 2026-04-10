@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import MessageBubble, { type Message, type MessageStatus, type MessageLatency, type MessageMode, type MCQ } from "./MessageBubble";
 import ChatInput from "./ChatInput";
@@ -34,6 +35,7 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
   const [limitHit, setLimitHit]   = useState<{ type: "daily" | "monthly"; reset: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const router = useRouter();
   const { setIsNavigating } = useThread();
 
   // Load existing thread messages
@@ -253,6 +255,7 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       );
     } finally {
       setStreaming(false);
+      router.refresh(); // update sidebar title after first message
     }
   }
 
@@ -372,8 +375,30 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       );
     } finally {
       setStreaming(false);
+      router.refresh(); // update sidebar title after quiz
     }
   }
+
+  const MODE_CARDS: { key: MessageMode; label: string; icon: string; desc: string }[] = [
+    {
+      key:   "standard",
+      label: "Answer",
+      icon:  "📖",
+      desc:  "Cited answers from 4 surgical textbooks",
+    },
+    {
+      key:   "viva",
+      label: "Viva",
+      icon:  "🎯",
+      desc:  "Structured exam-style answer with follow-up",
+    },
+    {
+      key:   "quiz",
+      label: "Quiz",
+      icon:  "🧠",
+      desc:  "5 MCQs sourced from textbooks with citations",
+    },
+  ];
 
   const exampleQuestions = [
     "Steps of a Whipple for pancreatic head cancer",
@@ -393,12 +418,16 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
     "Colorectal anatomy",
   ];
 
-  const examples = mode === "quiz" ? exampleTopics : exampleQuestions;
-  const emptySubtitle = mode === "quiz"
-    ? "Pick a topic and get 5 textbook-sourced MCQs with page citations."
-    : mode === "viva"
-    ? "Ask a question and get a structured viva answer — direct, cited, with a likely follow-up."
-    : "Answers grounded in 4 surgical textbooks — every claim is citable.";
+  const exampleVivaQuestions = [
+    "Anatomical basis of cholecystectomy",
+    "Layers encountered during inguinal hernia repair",
+    "Blood supply of the stomach in oesophagectomy",
+    "Relations of the common bile duct",
+    "Surgical anatomy of the portal triad",
+    "Define Pringle manoeuvre and its basis",
+  ];
+
+  const examples = mode === "quiz" ? exampleTopics : mode === "viva" ? exampleVivaQuestions : exampleQuestions;
 
   return (
     <div className="flex flex-col h-full">
@@ -406,9 +435,29 @@ export default function ChatView({ threadId, initialQuestion }: ChatViewProps) {
       <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-6">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full px-4 py-10 text-center select-none">
-            <p className="font-serif text-2xl font-semibold text-ink mb-1">What do you want to look up?</p>
-            <p className="font-serif text-sm text-ink-muted mb-8">{emptySubtitle}</p>
+            <p className="font-serif text-2xl font-semibold text-ink mb-6">What do you want to look up?</p>
 
+            {/* Mode cards */}
+            <div className="w-full max-w-xl grid grid-cols-3 gap-3 mb-8">
+              {MODE_CARDS.map((card) => (
+                <button
+                  key={card.key}
+                  onClick={() => setMode(card.key)}
+                  className="flex flex-col gap-1.5 px-4 py-4 rounded-xl text-left transition-all"
+                  style={{
+                    backgroundColor: mode === card.key ? "var(--papyrus)" : "var(--papyrus-light)",
+                    border: `${mode === card.key ? "2px" : "1px"} solid ${mode === card.key ? "var(--accent)" : "var(--papyrus-border)"}`,
+                    boxShadow: mode === card.key ? "0 1px 8px rgba(139,90,43,0.15)" : "none",
+                  }}
+                >
+                  <span className="text-xl">{card.icon}</span>
+                  <span className="font-serif text-sm font-semibold text-ink">{card.label}</span>
+                  <span className="font-serif text-xs text-ink-muted leading-snug">{card.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Example questions/topics */}
             <div className="w-full max-w-xl grid grid-cols-1 sm:grid-cols-2 gap-2">
               {examples.map((q) => (
                 <button

@@ -80,7 +80,8 @@ export default function Sidebar({ userEmail, threads, usage, onCloseMobile }: Si
   }
 
   const pinned = threads.filter((t) => (t as any).pinned);
-  const recent = threads.filter((t) => !(t as any).pinned);
+  // Exclude abandoned "New conversation" threads (created but no message ever sent)
+  const recent = threads.filter((t) => !(t as any).pinned && t.title && t.title !== "New conversation");
 
   return (
     <>
